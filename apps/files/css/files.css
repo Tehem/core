@@ -667,3 +667,13 @@ table.dragshadow td.size {
 .mask.transparent{
 	opacity: 0;
 }
+
+.fileActionsMenu {
+	/* FIXME: should be variable width, but default one is too big */
+	width: 100px;
+}
+
+.fileActionsMenu.hidden {
+	display: none;
+}
+

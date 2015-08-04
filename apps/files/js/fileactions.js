@@ -10,6 +10,12 @@
 
 (function() {
 
+	var TEMPLATE_FILE_ACTION_TRIGGER =
+		'<a class="action action-{{nameLowerCase}}" href="#" data-action="{{name}}">' +
+		'{{#if icon}}<img class="svg" alt="{{altText}}" src="{{icon}}" />{{/if}}' +
+		'{{#if displayName}}<span> {{displayName}}</span>{{/if}}' +
+		'</a>';
+
 	/**
 	 * Construct a new FileActions instance
 	 * @constructs FileActions
@@ -40,6 +46,15 @@
 		 */
 		_updateListeners: {},
 
+		_fileActionTriggerTemplate: null,
+
+		/**
+		 * File actions menu
+		 *
+		 * @type OCA.Files.FileActionsMenu
+		 */
+		_menu: null,
+
 		/**
 		 * @private
 		 */
@@ -48,6 +63,8 @@
 			// abusing jquery for events until we get a real event lib
 			this.$el = $('<div class="dummy-fileactions hidden"></div>');
 			$('body').append(this.$el);
+
+			this._showMenuClosure = _.bind(this._showMenu, this);
 		},
 
 		/**
@@ -136,8 +153,6 @@
 			}
 			if (_.isFunction(action.render)) {
 				actionSpec.render = action.render;
-			} else {
-				actionSpec.render = _.bind(this._defaultRenderAction, this);
 			}
 			if (!this.actions[mime]) {
 				this.actions[mime] = {};
@@ -166,6 +181,16 @@
 			this.defaults[mime] = name;
 			this._notifyUpdateListeners('setDefault', {defaultAction: {mime: mime, name: name}});
 		},
+
+		/**
+		 * Returns a map of file actions matching the given conditions
+		 *
+		 * @param {string} mime mime type
+		 * @param {string} type "dir" or "file"
+		 * @param {int} permissions permissions
+		 *
+		 * @return {Object.<string,OCA.Files.FileAction>} map of action name to action spec
+		 */
 		get: function (mime, type, permissions) {
 			var actions = this.getActions(mime, type, permissions);
 			var filteredActions = {};
@@ -174,6 +199,16 @@
 			});
 			return filteredActions;
 		},
+
+		/**
+		 * Returns an array of file actions matching the given conditions
+		 *
+		 * @param {string} mime mime type
+		 * @param {string} type "dir" or "file"
+		 * @param {int} permissions permissions
+		 *
+		 * @return {Array.<OCA.Files.FileAction>} array of action specs
+		 */
 		getActions: function (mime, type, permissions) {
 			var actions = {};
 			if (this.actions.all) {
@@ -201,6 +236,16 @@
 			});
 			return filteredActions;
 		},
+
+		/**
+		 * Returns the default file action for the given conditions
+		 *
+		 * @param {string} mime mime type
+		 * @param {string} type "dir" or "file"
+		 * @param {int} permissions permissions
+		 *
+		 * @return {OCA.Files.FileAction} action spec of the default action
+		 */
 		getDefault: function (mime, type, permissions) {
 			var mimePart;
 			if (mime) {
@@ -230,84 +275,65 @@
 		_defaultRenderAction: function(actionSpec, isDefault, context) {
 			var name = actionSpec.name;
 			if (name === 'Download' || !isDefault) {
-				var $actionLink = this._makeActionLink(actionSpec, context);
+				var params = {
+					name: actionSpec.name,
+					nameLowerCase: actionSpec.name.toLowerCase(),
+					displayName: actionSpec.displayName,
+					icon: actionSpec.icon,
+					altText: actionSpec.altText,
+				};
+				if (_.isFunction(actionSpec.icon)) {
+					params.icon = actionSpec.icon(context.$file.attr('data-file'));
+				}
+
+				var $actionLink = this._makeActionLink(params, context);
 				context.$file.find('a.name>span.fileactions').append($actionLink);
 				return $actionLink;
 			}
 		},
+
 		/**
 		 * Renders the action link element
 		 *
-		 * @param {OCA.Files.FileAction} actionSpec action object
-		 * @param {OCA.Files.FileActionContext} context action context
+		 * @param {Object} params action params
 		 */
-		_makeActionLink: function(actionSpec, context) {
-			var img = actionSpec.icon;
-			if (img && img.call) {
-				img = img(context.$file.attr('data-file'));
+		_makeActionLink: function(params) {
+			if (!this._fileActionTriggerTemplate) {
+				this._fileActionTriggerTemplate = Handlebars.compile(TEMPLATE_FILE_ACTION_TRIGGER);
 			}
-			var html = '<a href="#">';
-			if (img) {
-				html += '<img class="svg" alt="" src="' + img + '" />';
-			}
-			if (actionSpec.displayName) {
-				html += '<span> ' + actionSpec.displayName + '</span>';
-			}
-			html += '</a>';
 
-			return $(html);
+			return $(this._fileActionTriggerTemplate(params));
 		},
+
 		/**
-		 * Custom renderer for the "Rename" action.
-		 * Displays the rename action as an icon behind the file name.
+		 * Displays the file actions dropdown menu
 		 *
-		 * @param {OCA.Files.FileAction} actionSpec file action to render
-		 * @param {boolean} isDefault true if the action is a default action,
-		 * false otherwise
-		 * @param {OCAFiles.FileActionContext} context rendering context
+		 * @param {string} fileName file name
+		 * @param {OCA.Files.FileActionContext} context rendering context
 		 */
-		_renderRenameAction: function(actionSpec, isDefault, context) {
-			var $actionEl = this._makeActionLink(actionSpec, context);
-			var $container = context.$file.find('a.name span.nametext');
-			$actionEl.find('img').attr('alt', t('files', 'Rename'));
-			$container.find('.action-rename').remove();
-			$container.append($actionEl);
-			return $actionEl;
+		_showMenu: function(fileName, context) {
+			var $actionEl = context.$file.find('.action-menu');
+
+			this._menu = new OCA.Files.FileActionsMenu();
+			this._menu.showAt($actionEl, context);
 		},
+
 		/**
-		 * Custom renderer for the "Delete" action.
-		 * Displays the "Delete" action as a trash icon at the end of
-		 * the table row.
-		 *
-		 * @param {OCA.Files.FileAction} actionSpec file action to render
-		 * @param {boolean} isDefault true if the action is a default action,
-		 * false otherwise
-		 * @param {OCAFiles.FileActionContext} context rendering context
+		 * Renders the menu trigger on the given file list row
+		 * 
+		 * @param {Object} $tr file list row element
+		 * @param {OCA.Files.FileActionContext} context rendering context
 		 */
-		_renderDeleteAction: function(actionSpec, isDefault, context) {
-			var mountType = context.$file.attr('data-mounttype');
-			var deleteTitle = t('files', 'Delete');
-			if (mountType === 'external-root') {
-				deleteTitle = t('files', 'Disconnect storage');
-			} else if (mountType === 'shared-root') {
-				deleteTitle = t('files', 'Unshare');
-			}
-			var cssClasses = 'action delete icon-delete';
-			if((context.$file.data('permissions') & OC.PERMISSION_DELETE) === 0) {
-				// add css class no-permission to delete icon
-				cssClasses += ' no-permission';
-				deleteTitle = t('files', 'No permission to delete');
-			}
-			var $actionLink = $('<a href="#" original-title="' +
-				escapeHTML(deleteTitle) +
-				'" class="' +cssClasses + '">' +
-				'<span class="hidden-visually">' + escapeHTML(deleteTitle) + '</span>' +
-				'</a>'
-			);
-			var $container = context.$file.find('td:last');
-			$container.find('.delete').remove();
-			$container.append($actionLink);
-			return $actionLink;
+		_renderMenuTrigger: function($tr, context) {
+			// remove previous
+			$tr.find('.action-menu').remove();
+			$tr.find('.fileactions').append(this._renderInlineAction({
+				name: 'menu',
+				displayName: '',
+				icon: OC.imagePath('core', 'actions/more'),
+				altText: t('files', 'Actions'),
+				action: this._showMenuClosure
+			}, false, context));
 		},
 
 		/**
@@ -317,28 +343,14 @@
 		 * @param {OCA.Files.FileAction} actionSpec file action to render
 		 * @param {boolean} isDefault true if the action is a default action,
 		 * false otherwise
-		 * @param {OCAFiles.FileActionContext} context rendering context
-		 */
-		_renderDropDownAction: function(actionSpec) {
-			// TODO
-		},
-
-		/**
-		 * Renders the action element by calling actionSpec.render() and
-		 * registers the click event to process the action.
-		 *
-		 * @param {OCA.Files.FileAction} actionSpec file action to render
-		 * @param {boolean} isDefault true if the action is a default action,
-		 * false otherwise
-		 * @param {OCAFiles.FileActionContext} context rendering context
+		 * @param {OCA.Files.FileActionContext} context rendering context
 		 */
 		_renderInlineAction: function(actionSpec, isDefault, context) {
-			var $actionEl = actionSpec.render(actionSpec, isDefault, context);
+			var renderFunc = actionSpec.render || _.bind(this._defaultRenderAction, this);
+			var $actionEl = renderFunc(actionSpec, isDefault, context);
 			if (!$actionEl || !$actionEl.length) {
 				return;
 			}
-			$actionEl.addClass('action action-' + actionSpec.name.toLowerCase());
-			$actionEl.attr('data-action', actionSpec.name);
 			$actionEl.on(
 				'click', {
 					a: null
@@ -364,6 +376,7 @@
 			);
 			return $actionEl;
 		},
+
 		/**
 		 * Display file actions for the given element
 		 * @param parent "td" element of the file for which to display actions
@@ -400,24 +413,23 @@
 				this.getCurrentPermissions()
 			);
 
+			var context = {
+				$file: $tr,
+				fileActions: this,
+				fileList: fileList
+			};
+
 			$.each(actions, function (name, actionSpec) {
 				if (actionSpec.type === FileActions.TYPE_INLINE) {
 					self._renderInlineAction(
 						actionSpec,
-						actionSpec.action === defaultAction, {
-							$file: $tr,
-							fileActions: this,
-							fileList : fileList
-						}
-					);
-				} else {
-					self._renderDropDownAction(
-						actionSpec
+						actionSpec.action === defaultAction,
+						context
 					);
 				}
 			});
 
-			// TODO: render dropdown button
+			this._renderMenuTrigger($tr, context);
 
 			if (triggerEvent){
 				fileList.$fileList.trigger(jQuery.Event("fileActionsReady", {fileList: fileList, $files: $tr}));
@@ -449,7 +461,6 @@
 				icon: function() {
 					return OC.imagePath('core', 'actions/delete');
 				},
-				render: _.bind(this._renderDeleteAction, this),
 				actionHandler: function(fileName, context) {
 					// if there is no permission to delete do nothing
 					if((context.$file.data('permissions') & OC.PERMISSION_DELETE) === 0) {
@@ -469,7 +480,6 @@
 				icon: function() {
 					return OC.imagePath('core', 'actions/rename');
 				},
-				render: _.bind(this._renderRenameAction, this),
 				actionHandler: function (filename, context) {
 					context.fileList.rename(filename);
 				}
