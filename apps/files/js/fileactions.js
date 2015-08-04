@@ -452,29 +452,18 @@
 		 * Register the actions that are used by default for the files app.
 		 */
 		registerDefaultActions: function() {
-			this.registerAction({
-				name: 'Delete',
-				displayName: '',
-				mime: 'all',
-				// permission is READ because we show a hint instead if there is no permission
-				permissions: OC.PERMISSION_READ,
-				icon: function() {
-					return OC.imagePath('core', 'actions/delete');
-				},
-				actionHandler: function(fileName, context) {
-					// if there is no permission to delete do nothing
-					if((context.$file.data('permissions') & OC.PERMISSION_DELETE) === 0) {
-						return;
-					}
-					context.fileList.do_delete(fileName, context.dir);
-					$('.tipsy').remove();
+			this.register('all', 'Download', OC.PERMISSION_READ, function () {
+				return OC.imagePath('core', 'actions/download');
+			}, function (filename, context) {
+				var dir = context.dir || context.fileList.getCurrentDirectory();
+				var url = context.fileList.getDownloadUrl(filename, dir);
+				if (url) {
+					OC.redirect(url);
 				}
-			});
+			}, t('files', 'Download'));
 
-			// t('files', 'Rename')
 			this.registerAction({
 				name: 'Rename',
-				displayName: '',
 				mime: 'all',
 				permissions: OC.PERMISSION_UPDATE,
 				icon: function() {
@@ -495,15 +484,24 @@
 
 			this.setDefault('dir', 'Open');
 
-			this.register('all', 'Download', OC.PERMISSION_READ, function () {
-				return OC.imagePath('core', 'actions/download');
-			}, function (filename, context) {
-				var dir = context.dir || context.fileList.getCurrentDirectory();
-				var url = context.fileList.getDownloadUrl(filename, dir);
-				if (url) {
-					OC.redirect(url);
+			this.registerAction({
+				name: 'Delete',
+				mime: 'all',
+				// permission is READ because we show a hint instead if there is no permission
+				permissions: OC.PERMISSION_READ,
+				icon: function() {
+					return OC.imagePath('core', 'actions/delete');
+				},
+				actionHandler: function(fileName, context) {
+					// if there is no permission to delete do nothing
+					if((context.$file.data('permissions') & OC.PERMISSION_DELETE) === 0) {
+						return;
+					}
+					context.fileList.do_delete(fileName, context.dir);
+					$('.tipsy').remove();
 				}
-			}, t('files', 'Download'));
+			});
+
 		}
 	};
 

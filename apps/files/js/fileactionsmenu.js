@@ -13,7 +13,7 @@
 	var TEMPLATE_MENU =
 		'<ul>' +
 		'{{#each items}}' +
-		'<li><a href="#" class="action" data-action="{{name}}">{{displayName}}</a></li>' +
+		'<li><a href="#" class="action" data-action="{{name}}"><img src="{{icon}}"/>{{displayName}}</a></li>' +
 		'{{/each}}' +
 		'</ul>';
 
@@ -41,7 +41,7 @@
 		 * @private
 		 */
 		initialize: function(fileActions, fileList) {
-			this.$el = $('<div class="fileActionsMenu dropdown hidden"></div>');
+			this.$el = $('<div class="fileActionsMenu dropdown hidden menu"></div>');
 			this._template = Handlebars.compile(TEMPLATE_MENU);
 
 			this.$el.on('click', 'a.action', _.bind(this._onClickAction, this));
